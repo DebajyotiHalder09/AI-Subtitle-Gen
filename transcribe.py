@@ -29,7 +29,7 @@ current_subtitles = None
 
 # Load the Whisper model 
 try:
-    model = whisper.load_model("base")
+    model = whisper.load_model("tiny")
     logger.info("Whisper model loaded successfully")
 except Exception as e:
     logger.error(f"Failed to load Whisper model: {e}")
@@ -154,4 +154,5 @@ def save_subtitles():
         return jsonify({"error": f"Error saving subtitles: {e}"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5000)
+    port = int(os.environ.get('PORT', 5000))  # Use the PORT environment variable
+    app.run(debug=False, host='0.0.0.0', port=port)
