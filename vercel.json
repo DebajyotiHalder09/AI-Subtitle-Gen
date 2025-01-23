@@ -1,15 +1,10 @@
 {
-    "version":2,
-    "builds":[
-        {
-            "src":"trasncribe.py",
-            "use":"@vercel/python"
-        }
+    "version": 2,
+    "builds": [
+      { "src": "api/transcribe.py", "use": "@vercel/python" }
     ],
-    "routes":[
-        {
-            "src":"/(.*)",
-            "dest":"trasncribe.py"
-        }
+    "routes": [
+      { "src": "/(.*)", "dest": "api/transcribe.py" }
     ]
-}
+  }
+  
