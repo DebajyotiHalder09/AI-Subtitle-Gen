@@ -16,9 +16,12 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit file size to 50 MB
+
+# CORS setup: Restrict in production
 CORS(app, resources={
     r"/*": {
-        "origins": "*",
+        "origins": "http://localhost:3000",  # Update with your domain in production
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
     }
@@ -29,7 +32,7 @@ current_subtitles = None
 
 # Load the Whisper model
 try:
-    # Use a smaller model that works across different environments
+    # Load a lightweight model; use CPU if no GPU is available
     model = whisper.load_model("tiny")
     logger.info("Whisper model loaded successfully")
 except Exception as e:
@@ -68,16 +71,24 @@ def transcribe():
 
     audio_file = request.files["audio"]
 
+    # Validate file type
     allowed_extensions = (".mp3", ".wav", ".m4a", ".webm", ".ogg")
     if not audio_file.filename.lower().endswith(allowed_extensions):
         logger.warning(f"Invalid file type: {audio_file.filename}")
         return jsonify({"error": "Invalid file type. Only audio files are allowed."}), 400
 
+    temp_audio_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio:
             audio_file.save(temp_audio.name)
             temp_audio_path = temp_audio.name
 
+        # Check if the uploaded file is empty
+        if os.stat(temp_audio_path).st_size == 0:
+            logger.warning("Uploaded file is empty")
+            return jsonify({"error": "Uploaded file is empty."}), 400
+
+        # Transcribe the audio
         result = model.transcribe(temp_audio_path, task="transcribe", word_timestamps=True, fp16=False)
 
         if "segments" not in result:
@@ -96,7 +107,8 @@ def transcribe():
         return jsonify({"error": f"Error during transcription: {str(e)}"}), 500
 
     finally:
-        if os.path.exists(temp_audio_path):
+        # Ensure temporary file is deleted
+        if temp_audio_path and os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
 
 @app.route("/save-subtitles", methods=["GET"])
