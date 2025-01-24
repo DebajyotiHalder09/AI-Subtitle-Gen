@@ -191,53 +191,31 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                if (!response.ok) {
-                    // Parse error message from server
-                    return response.json().then(errorData => {
-                        throw new Error(errorData.error || 'Unknown transcription error');
-                    });
-                }
-                return response.json();
-            })
-            .then(subtitlesData => {
-                // Close the modal
-                transcriptionModal.hide();
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', response.headers);
 
-                // Validate subtitles data
-                if (!Array.isArray(subtitlesData) || subtitlesData.length === 0) {
-                    throw new Error('No subtitles generated');
-                }
+                    if (!response.ok) {
+                        return response.json().then(errorData => {
+                            console.log('Error data:', errorData);
+                            throw new Error(errorData.error || 'Unknown transcription error');
+                        }).catch(() => {
+                            console.log('Non-JSON error response');
+                            throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Subtitles:', data);
 
-                // Update JSON file input
-                const jsonInput = document.getElementById('jsonFile');
-                const jsonFile = new File([JSON.stringify(subtitlesData)], 'subtitles.json', {
-                    type: 'application/json',
+                    // Handle success (process the subtitles data here)
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+
+                    // Handle error (e.g., show an error message to the user)
                 });
-                
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(jsonFile);
-                jsonInput.files = dataTransfer.files;
-                
-                // Trigger change event to load subtitles
-                const event = new Event('change');
-                jsonInput.dispatchEvent(event);
-
-                // Enable download button
-                downloadSubtitlesBtn.disabled = false;
-
-                // Show success message
-                alert('Subtitles generated successfully!');
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert(`Failed to generate subtitles: ${error.message}`);
-                
-                // Close the modal
-                const transcriptionModal = new bootstrap.Modal(document.getElementById('transcriptionStatusModal'));
-                transcriptionModal.hide();
-            });
-        });
 
         // Download Subtitles
         downloadSubtitlesBtn.addEventListener('click', function () {
@@ -266,6 +244,7 @@
                 alert(`Failed to download subtitles: ${error.message}`);
             });
         });
+    });
 
     </script>
     <script src="https://kit.fontawesome.com/99363101d6.js" crossorigin="anonymous"></script>
