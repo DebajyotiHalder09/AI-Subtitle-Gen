@@ -112,146 +112,163 @@
         const jsonFileInput = document.getElementById("jsonFile");
         const generateSubtitlesBtn = document.getElementById('generateSubtitlesBtn');
         const downloadSubtitlesBtn = document.getElementById('downloadSubtitlesBtn');
-
+    
         let audioURL = null;
         let subtitles = [];
-
+        let lastSubtitle = '';
+    
+        // Validate file size (limit: 10MB for audio, 1MB for JSON)
+        const validateFileSize = (file, maxSizeMB) => {
+            const maxSizeBytes = maxSizeMB * 1024 * 1024;
+            return file.size <= maxSizeBytes;
+        };
+    
         // Handle audio file selection
         audioFileInput.addEventListener("change", function (event) {
             const file = event.target.files[0];
             if (file) {
+                if (!validateFileSize(file, 10)) {
+                    alert("Audio file size must be 10MB or less.");
+                    audioFileInput.value = ""; // Clear invalid file
+                    return;
+                }
                 audioURL = URL.createObjectURL(file);
                 document.getElementById("audioSource").src = audioURL;
                 audioPlayer.load();
+                subtitles = []; // Clear subtitles
+                subtitlesContainer.textContent = "No subtitles loaded.";
+                lastSubtitle = ''; // Reset last subtitle
             }
         });
-
+    
         // Handle JSON file selection
         jsonFileInput.addEventListener("change", function (event) {
             const file = event.target.files[0];
             if (file) {
+                if (!validateFileSize(file, 1)) {
+                    alert("JSON file size must be 1MB or less.");
+                    jsonFileInput.value = ""; // Clear invalid file
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = function (e) {
                     try {
                         subtitles = JSON.parse(e.target.result);
+                        if (!Array.isArray(subtitles) || subtitles.length === 0) {
+                            throw new Error("Invalid subtitle format.");
+                        }
                         setupSubtitleSync();
                     } catch (error) {
-                        alert("Failed to parse subtitles JSON.");
+                        alert("Failed to parse subtitles JSON. Please ensure it is valid.");
+                        subtitles = []; // Clear invalid subtitles
                     }
                 };
                 reader.readAsText(file);
             }
         });
-
+    
         function setupSubtitleSync() {
             // Clear previous subtitle listeners
             audioPlayer.removeEventListener('timeupdate', updateSubtitles);
-            
+    
             // Add timeupdate event listener to sync subtitles
             audioPlayer.addEventListener('timeupdate', updateSubtitles);
+    
+            subtitlesContainer.textContent = "Subtitles loaded and ready!";
         }
-
+    
         function updateSubtitles() {
             const currentTime = audioPlayer.currentTime;
-            
+    
             // Find and display current subtitle
-            const currentSubtitle = subtitles.find(subtitle => 
+            const currentSubtitle = subtitles.find(subtitle =>
                 currentTime >= subtitle.start && currentTime <= subtitle.end
             );
-            
-            if (currentSubtitle) {
+    
+            if (currentSubtitle && currentSubtitle.text !== lastSubtitle) {
                 subtitlesContainer.textContent = currentSubtitle.text;
-            } else {
-                subtitlesContainer.textContent = '';
+                lastSubtitle = currentSubtitle.text; // Update last subtitle
+            } else if (!currentSubtitle) {
+                subtitlesContainer.textContent = ''; // Clear subtitle if none match
+                lastSubtitle = ''; // Reset last subtitle
             }
         }
-
+    
         // Reset subtitles when audio ends
         audioPlayer.addEventListener('ended', () => {
-            subtitlesContainer.textContent = '';
+            subtitlesContainer.textContent = 'Audio playback ended.';
+            lastSubtitle = '';
         });
-
+    
         // Transcription and Download Script
         generateSubtitlesBtn.addEventListener('click', function () {
-        const audioFile = document.getElementById('audioFile').files[0];
-        
-        if (!audioFile) {
-            alert('Please select an audio file first');
-            return;
-        }
-
-        // Show loading modal
-        const transcriptionModal = new bootstrap.Modal(document.getElementById('transcriptionStatusModal'));
-        transcriptionModal.show();
-
-        const formData = new FormData();
-        formData.append('audio', audioFile);
-
-        fetch('https://subgen.onrender.com/transcribe', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-        if (!response.ok) {
-            // Try to parse error response as JSON; if it fails, log raw response
-            return response.text().then(text => {
-                try {
-                    const errorData = JSON.parse(text);
-                    throw new Error(errorData.error || 'Unknown transcription error');
-                } catch (e) {
-                    console.error('Non-JSON error response:', text);
-                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
-                }
-            });
-        }
-        return response.json(); // Parse successful response as JSON
-    })
-    .then(data => {
-        console.log('Subtitles:', data);
-
-        // Handle success (process the subtitles data here)
-        if (data.subtitles) {
-            subtitles = data.subtitles; // Assign subtitles data to global subtitles array
-            setupSubtitleSync(); // Sync subtitles with the audio player
-            downloadSubtitlesBtn.disabled = false; // Enable the download button
-        }
-
-        // Hide transcription modal after transcription is complete
-        transcriptionModal.hide();
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        transcriptionModal.hide(); // Hide modal on error
-        alert(`Error: ${error.message}`);
-    });
-    });
-
-    // Download Subtitles
-    downloadSubtitlesBtn.addEventListener('click', function () {
-    fetch("/save-subtitles")
-        .then((response) => {
-            if (!response.ok) {
-                throw new Error("Failed to download subtitles");
+            const audioFile = audioFileInput.files[0];
+    
+            if (!audioFile) {
+                alert('Please select an audio file first');
+                return;
             }
-            return response.blob(); // Get the response as a blob
-        })
-        .then((blob) => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = url;
-            a.download = "subtitles.json"; // The file name when downloading
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-        })
-        .catch((error) => {
-            console.error("Error:", error);
-            alert("Failed to download subtitles.");
+    
+            // Show loading modal
+            const transcriptionModal = new bootstrap.Modal(document.getElementById('transcriptionStatusModal'));
+            transcriptionModal.show();
+    
+            const formData = new FormData();
+            formData.append('audio', audioFile);
+    
+            fetch('/transcribe', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(errorData => {
+                            throw new Error(errorData.error || 'Unknown transcription error');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.subtitles) {
+                        subtitles = data.subtitles; // Assign subtitles data to global subtitles array
+                        setupSubtitleSync(); // Sync subtitles with the audio player
+                        downloadSubtitlesBtn.disabled = false; // Enable the download button
+                    }
+                    transcriptionModal.hide(); // Hide transcription modal
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    transcriptionModal.hide(); // Hide modal on error
+                    alert(`Error: ${error.message}`);
+                });
         });
-});
-
+    
+        // Download Subtitles
+        downloadSubtitlesBtn.addEventListener('click', function () {
+            fetch("/save-subtitles")
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Failed to download subtitles");
+                    }
+                    return response.blob(); // Get the response as a blob
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.style.display = "none";
+                    a.href = url;
+                    a.download = "subtitles.json"; // The file name when downloading
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("Failed to download subtitles.");
+                });
+        });
     </script>
+    
     <script src="https://kit.fontawesome.com/99363101d6.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 
