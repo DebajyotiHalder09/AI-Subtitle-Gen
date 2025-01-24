@@ -187,7 +187,7 @@
         const formData = new FormData();
         formData.append('audio', audioFile);
 
-        fetch('/transcribe', {
+        fetch('https://subgen.onrender.com/transcribe', {
             method: 'POST',
             body: formData
         })
