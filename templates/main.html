@@ -187,10 +187,11 @@
             const formData = new FormData();
             formData.append('audio', audioFile);
 
-            fetch('http://localhost:5000/transcribe', {
+            fetch('/transcribe', {
                 method: 'POST',
                 body: formData
             })
+
             .then(response => response.json())
             .then(subtitlesData => {
                 // Close the modal
@@ -226,7 +227,7 @@
         // Download Subtitles
         // Download Subtitles
         downloadSubtitlesBtn.addEventListener('click', function() {
-            fetch('http://localhost:5000/save-subtitles')
+            fetch('/save-subtitles')
             .then(response => response.json())
             .then(data => {
                 if (data.message === "Save cancelled by user") {

@@ -42,6 +42,14 @@ def index():
     """
     return render_template('main.html')  # Replace with the actual name of your HTML file
 
+@app.route('/tutorial')
+def tutorial():
+    return render_template('tutorial.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
 def show_save_dialog(subtitles):
     """
     Open a file save dialog to select subtitle save location.
