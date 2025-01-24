@@ -10,17 +10,17 @@
 <body>
     <nav class="navbar navbar-expand-sm navbar-light bg-light">
         <div class="container-fluid">
-            <a class="navbar-brand" href="main.html">AI-Subtitle-Generator-Player</a>
+            <a class="navbar-brand" href="/">AI-SUB-GEN</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
               <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link hover-effect" href="tutorial.html" style="transition: font-weight 0.3s;">Tutorial</a>
+                        <a class="nav-link hover-effect" href="/tutorial" style="transition: font-weight 0.3s;">Tutorial</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link hover-effect" href="about.html" style="transition: font-weight 0.3s;">About</a>
+                        <a class="nav-link hover-effect" href="/about" style="transition: font-weight 0.3s;">About</a>
                     </li>
             </ul>
         </div>
@@ -171,7 +171,7 @@
             subtitlesContainer.textContent = '';
         });
 
-        // Generate Subtitles
+        // Transcription and Download Script
         generateSubtitlesBtn.addEventListener('click', function() {
             const audioFile = document.getElementById('audioFile').files[0];
             
@@ -191,11 +191,23 @@
                 method: 'POST',
                 body: formData
             })
-
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    // Parse error message from server
+                    return response.json().then(errorData => {
+                        throw new Error(errorData.error || 'Unknown transcription error');
+                    });
+                }
+                return response.json();
+            })
             .then(subtitlesData => {
                 // Close the modal
                 transcriptionModal.hide();
+
+                // Validate subtitles data
+                if (!Array.isArray(subtitlesData) || subtitlesData.length === 0) {
+                    throw new Error('No subtitles generated');
+                }
 
                 // Update JSON file input
                 const jsonInput = document.getElementById('jsonFile');
@@ -214,26 +226,31 @@
                 // Enable download button
                 downloadSubtitlesBtn.disabled = false;
 
+                // Show success message
                 alert('Subtitles generated successfully!');
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Failed to generate subtitles');
+                alert(`Failed to generate subtitles: ${error.message}`);
+                
                 // Close the modal
+                const transcriptionModal = new bootstrap.Modal(document.getElementById('transcriptionStatusModal'));
                 transcriptionModal.hide();
             });
         });
 
         // Download Subtitles
-        // Download Subtitles
         downloadSubtitlesBtn.addEventListener('click', function () {
             fetch('/save-subtitles')
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error('Failed to download subtitles');
+                        return response.json().then(errorData => {
+                            throw new Error(errorData.error || 'Failed to download subtitles');
+                        });
                     }
-                    return response.blob();
+                    return response;
                 })
+                .then(response => response.blob())
                 .then(blob => {
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -244,10 +261,10 @@
                     a.click();
                     window.URL.revokeObjectURL(url);
                 })
-                .catch(error => {
-                    console.error('Download error:', error);
-                    alert('Failed to download subtitles');
-                });
+            .catch(error => {
+                console.error('Download error:', error);
+                alert(`Failed to download subtitles: ${error.message}`);
+            });
         });
 
     </script>

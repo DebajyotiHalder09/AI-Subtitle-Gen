@@ -3,11 +3,9 @@ import json
 import os
 import logging
 import tempfile
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, make_response
 from flask_cors import CORS
-import sys
-from flask import send_file
-
+import traceback
 
 # Configure logging
 logging.basicConfig(
@@ -31,11 +29,12 @@ current_subtitles = None
 
 # Load the Whisper model
 try:
-    model = whisper.load_model("tiny")
+    # Use a smaller model that works across different environments
+    model = whisper.load_model("base")
     logger.info("Whisper model loaded successfully")
 except Exception as e:
     logger.error(f"Failed to load Whisper model: {e}")
-    sys.exit(1)
+    raise
 
 # Routes
 @app.route("/")
@@ -80,36 +79,40 @@ def transcribe():
         logger.warning(f"Invalid file type: {audio_file.filename}")
         return jsonify({"error": "Invalid file type. Only audio files are allowed."}), 400
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio_file.filename)[1]) as temp_audio:
-        audio_file.save(temp_audio.name)
-        temp_audio_path = temp_audio.name
-
     try:
-        result = model.transcribe(
-            temp_audio_path,
-            task="transcribe",
-            word_timestamps=True,
-            fp16=False,
-        )
+        # Save audio file to a temporary file
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio:
+            audio_file.save(temp_audio.name)
+            temp_audio_path = temp_audio.name  # Save the path to the temp file
 
-        current_subtitles = []
-        for segment in result["segments"]:
-            current_subtitles.append({
+        # Transcribe the audio using Whisper
+        try:
+            result = model.transcribe(
+                temp_audio_path,
+                task="transcribe",
+                word_timestamps=True,
+                fp16=False,
+            )
+        finally:
+            # Remove the temporary file after transcription
+            os.remove(temp_audio_path)
+
+        # Extract and store subtitles
+        current_subtitles = [
+            {
                 "start": segment["start"],
                 "end": segment["end"],
                 "text": segment["text"].strip(),
-            })
+            }
+            for segment in result["segments"]
+        ]
 
         logger.info(f"Successfully transcribed audio: {len(current_subtitles)} segments")
         return jsonify(current_subtitles)
 
     except Exception as e:
-        logger.error(f"Transcription error: {e}")
-        return jsonify({"error": f"Error during transcription: {e}"}), 500
-
-    finally:
-        if os.path.exists(temp_audio_path):
-            os.remove(temp_audio_path)
+        logger.error(f"Transcription error: {traceback.format_exc()}")
+        return jsonify({"error": f"Error during transcription: {str(e)}"}), 500
 
 @app.route("/save-subtitles", methods=["GET"])
 def save_subtitles():
@@ -126,26 +129,20 @@ def save_subtitles():
         return jsonify({"error": "No subtitles available to save."}), 404
 
     try:
-        # Create a temporary JSON file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        temp_file_path = temp_file.name
-        temp_file.close()
-
-        with open(temp_file_path, "w", encoding="utf-8") as f:
-            json.dump(current_subtitles, f, ensure_ascii=False, indent=2)
-
-        # Send the file to the client for download
-        return send_file(temp_file_path, as_attachment=True, download_name="subtitles.json")
+        # Create JSON string
+        json_data = json.dumps(current_subtitles, ensure_ascii=False, indent=2)
+        
+        # Create response with proper headers for file download
+        response = make_response(json_data)
+        response.headers['Content-Disposition'] = 'attachment; filename=subtitles.json'
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        
+        return response
 
     except Exception as e:
-        logger.error(f"Error saving subtitles: {e}")
-        return jsonify({"error": f"Error saving subtitles: {e}"}), 500
-
-    finally:
-        # Ensure the temporary file is deleted after sending
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+        logger.error(f"Error saving subtitles: {traceback.format_exc()}")
+        return jsonify({"error": f"Error saving subtitles: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Use the PORT environment variable
+    port = int(os.environ.get("PORT", 5000))  # Use the PORT environment variable for Render
     app.run(debug=False, host="0.0.0.0", port=port)
