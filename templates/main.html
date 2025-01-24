@@ -172,79 +172,81 @@
         });
 
         // Transcription and Download Script
-        generateSubtitlesBtn.addEventListener('click', function() {
-            const audioFile = document.getElementById('audioFile').files[0];
-            
-            if (!audioFile) {
-                alert('Please select an audio file first');
-                return;
-            }
+generateSubtitlesBtn.addEventListener('click', function() {
+    const audioFile = document.getElementById('audioFile').files[0];
+    
+    if (!audioFile) {
+        alert('Please select an audio file first');
+        return;
+    }
 
-            // Show loading modal
-            const transcriptionModal = new bootstrap.Modal(document.getElementById('transcriptionStatusModal'));
-            transcriptionModal.show();
+    // Show loading modal
+    const transcriptionModal = new bootstrap.Modal(document.getElementById('transcriptionStatusModal'));
+    transcriptionModal.show();
 
-            const formData = new FormData();
-            formData.append('audio', audioFile);
+    const formData = new FormData();
+    formData.append('audio', audioFile);
 
-            fetch('/transcribe', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => {
-                    console.log('Response status:', response.status);
-                    console.log('Response headers:', response.headers);
-
-                    if (!response.ok) {
-                        return response.json().then(errorData => {
-                            console.log('Error data:', errorData);
-                            throw new Error(errorData.error || 'Unknown transcription error');
-                        }).catch(() => {
-                            console.log('Non-JSON error response');
-                            throw new Error(`Server error: ${response.status} ${response.statusText}`);
-                        });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Subtitles:', data);
-
-                    // Handle success (process the subtitles data here)
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-
-                    // Handle error (e.g., show an error message to the user)
-                });
-
-        // Download Subtitles
-        downloadSubtitlesBtn.addEventListener('click', function () {
-            fetch('/save-subtitles')
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(errorData => {
-                            throw new Error(errorData.error || 'Failed to download subtitles');
-                        });
-                    }
-                    return response;
-                })
-                .then(response => response.blob())
-                .then(blob => {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = 'subtitles.json';
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                })
-            .catch(error => {
-                console.error('Download error:', error);
-                alert(`Failed to download subtitles: ${error.message}`);
+    fetch('/transcribe', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(errorData => {
+                throw new Error(errorData.error || 'Unknown transcription error');
             });
-        });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Subtitles:', data);
+
+        // Handle success (process the subtitles data here)
+        if (data.subtitles) {
+            subtitles = data.subtitles;  // Assign subtitles data to global subtitles array
+            setupSubtitleSync();  // Sync subtitles with the audio player
+            downloadSubtitlesBtn.disabled = false;  // Enable the download button
+        }
+
+        // Hide transcription modal after transcription is complete
+        transcriptionModal.hide();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        transcriptionModal.hide();  // Hide modal on error
+        alert(`Error: ${error.message}`);
     });
+});
+
+// Download Subtitles
+downloadSubtitlesBtn.addEventListener('click', function () {
+    fetch('/save-subtitles')
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || 'Failed to download subtitles');
+                });
+            }
+            return response;
+        })
+        .then(response => response.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'subtitles.json';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Download error:', error);
+            alert(`Failed to download subtitles: ${error.message}`);
+        });
+});
+
 
     </script>
     <script src="https://kit.fontawesome.com/99363101d6.js" crossorigin="anonymous"></script>
