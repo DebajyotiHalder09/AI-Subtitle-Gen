@@ -192,31 +192,38 @@
             body: formData
         })
         .then(response => {
-            if (!response.ok) {
-                return response.json().then(errorData => {
+        if (!response.ok) {
+            // Try to parse error response as JSON; if it fails, log raw response
+            return response.text().then(text => {
+                try {
+                    const errorData = JSON.parse(text);
                     throw new Error(errorData.error || 'Unknown transcription error');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Subtitles:', data);
+                } catch (e) {
+                    console.error('Non-JSON error response:', text);
+                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                }
+            });
+        }
+        return response.json(); // Parse successful response as JSON
+    })
+    .then(data => {
+        console.log('Subtitles:', data);
 
-            // Handle success (process the subtitles data here)
-            if (data.subtitles) {
-                subtitles = data.subtitles;  // Assign subtitles data to global subtitles array
-                setupSubtitleSync();  // Sync subtitles with the audio player
-                downloadSubtitlesBtn.disabled = false;  // Enable the download button
-            }
+        // Handle success (process the subtitles data here)
+        if (data.subtitles) {
+            subtitles = data.subtitles; // Assign subtitles data to global subtitles array
+            setupSubtitleSync(); // Sync subtitles with the audio player
+            downloadSubtitlesBtn.disabled = false; // Enable the download button
+        }
 
-            // Hide transcription modal after transcription is complete
-            transcriptionModal.hide();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            transcriptionModal.hide();  // Hide modal on error
-            alert(`Error: ${error.message}`);
-        });
+        // Hide transcription modal after transcription is complete
+        transcriptionModal.hide();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        transcriptionModal.hide(); // Hide modal on error
+        alert(`Error: ${error.message}`);
+    });
     });
 
     // Download Subtitles
