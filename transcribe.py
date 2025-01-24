@@ -60,12 +60,6 @@ def about():
 
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
-    """
-    Transcribe uploaded audio file using Whisper.
-    
-    Returns:
-        JSON response with transcription or error details
-    """
     global current_subtitles
 
     if "audio" not in request.files:
@@ -80,39 +74,30 @@ def transcribe():
         return jsonify({"error": "Invalid file type. Only audio files are allowed."}), 400
 
     try:
-        # Save audio file to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio:
             audio_file.save(temp_audio.name)
-            temp_audio_path = temp_audio.name  # Save the path to the temp file
+            temp_audio_path = temp_audio.name
 
-        # Transcribe the audio using Whisper
-        try:
-            result = model.transcribe(
-                temp_audio_path,
-                task="transcribe",
-                word_timestamps=True,
-                fp16=False,
-            )
-        finally:
-            # Remove the temporary file after transcription
-            os.remove(temp_audio_path)
+        result = model.transcribe(temp_audio_path, task="transcribe", word_timestamps=True, fp16=False)
 
-        # Extract and store subtitles
+        if "segments" not in result:
+            logger.error("Whisper did not return any segments")
+            return jsonify({"error": "Failed to transcribe audio. No subtitles generated."}), 500
+
         current_subtitles = [
-            {
-                "start": segment["start"],
-                "end": segment["end"],
-                "text": segment["text"].strip(),
-            }
+            {"start": segment["start"], "end": segment["end"], "text": segment["text"].strip()}
             for segment in result["segments"]
         ]
-
-        logger.info(f"Successfully transcribed audio: {len(current_subtitles)} segments")
+        logger.info(f"Successfully transcribed {len(current_subtitles)} segments")
         return jsonify(current_subtitles)
 
     except Exception as e:
         logger.error(f"Transcription error: {traceback.format_exc()}")
         return jsonify({"error": f"Error during transcription: {str(e)}"}), 500
+
+    finally:
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
 
 @app.route("/save-subtitles", methods=["GET"])
 def save_subtitles():
