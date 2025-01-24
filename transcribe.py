@@ -48,7 +48,7 @@ def select_device():
 # Load the Whisper model with device selection
 try:
     device = select_device()
-    model = whisper.load_model("base", device=device)
+    model = whisper.load_model("tiny", device=device)
     logger.info(f"Whisper model loaded on {device}")
 except Exception as e:
     logger.error(f"Failed to load Whisper model: {e}")
