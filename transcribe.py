@@ -4,11 +4,10 @@ import json
 import os
 import logging
 import tempfile
-from flask import Flask, request, jsonify, render_template, make_response
+from flask import Flask, request, jsonify, render_template, make_response, send_file
 from flask_cors import CORS
 import traceback
 import time
-import threading
 
 # Configure logging
 logging.basicConfig(
@@ -21,17 +20,8 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # Limit file size to 25 MB
 
-# CORS setup for Render
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",  # More permissive for Render deployment
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True,
-    }
-})
-
-# Global variable to store subtitles temporarily
-current_subtitles = None
+# CORS setup
+CORS(app, resources={r"/*": {"origins": "*", "allow_headers": ["Content-Type"]}})
 
 # Detect and select device
 def select_device():
@@ -45,7 +35,7 @@ def select_device():
         logger.info("Using CPU")
         return "cpu"
 
-# Load the Whisper model with device selection
+# Load the Whisper model
 try:
     device = select_device()
     model = whisper.load_model("tiny", device=device)
@@ -69,34 +59,11 @@ def about():
     """Route for the about page."""
     return render_template("about.html")
 
-def transcribe_audio(temp_audio_path):
-    global current_subtitles
-    try:
-        # Transcribe with reduced complexity
-        logger.info(f"Starting transcription for {temp_audio_path}")
-        result = model.transcribe(
-            temp_audio_path,
-            task="transcribe",
-            word_timestamps=False,
-            fp16=(device != "cpu")  # Use FP16 only if not on CPU
-        )
-
-        # Process the transcription result
-        current_subtitles = [
-            {"start": segment.get("start", 0), "end": segment.get("end", 0), "text": segment["text"].strip()}
-            for segment in result.get("segments", [])
-        ]
-
-        logger.info("Transcription completed successfully")
-
-    except Exception as e:
-        logger.error(f"Transcription error: {traceback.format_exc()}")
-
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
-    global current_subtitles
     start_time = time.time()
 
+    # Check if an audio file is uploaded
     if "audio" not in request.files:
         return jsonify({"error": "No audio file uploaded."}), 400
 
@@ -109,7 +76,7 @@ def transcribe():
 
     temp_audio_path = None
     try:
-        # Create unique temporary file
+        # Save uploaded audio to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio:
             audio_file.save(temp_audio.name)
             temp_audio_path = temp_audio.name
@@ -118,19 +85,28 @@ def transcribe():
         if os.stat(temp_audio_path).st_size == 0:
             return jsonify({"error": "Uploaded file is empty."}), 400
 
-        # Start transcription in a separate thread to avoid blocking Flask
-        transcription_thread = threading.Thread(target=transcribe_audio, args=(temp_audio_path,))
-        transcription_thread.start()
+        # Transcribe audio
+        logger.info(f"Starting transcription for {temp_audio_path}")
+        result = model.transcribe(
+            temp_audio_path,
+            task="transcribe",
+            word_timestamps=False,
+            fp16=(device != "cpu")  # Use FP16 only if not on CPU
+        )
 
-        # Wait for the transcription to finish (you can also set a timeout here)
-        transcription_thread.join(timeout=60)  # Timeout after 60 seconds
+        # Process transcription result
+        subtitles = [
+            {"start": segment.get("start", 0), "end": segment.get("end", 0), "text": segment["text"].strip()}
+            for segment in result.get("segments", [])
+        ]
 
-        if current_subtitles is None:
-            return jsonify({"error": "Transcription failed or timed out."}), 500
+        # Set global variable for subtitles
+        global current_subtitles
+        current_subtitles = subtitles
 
         process_time = time.time() - start_time
         logger.info(f"Transcription completed in {process_time:.2f} seconds")
-        return jsonify({"subtitles": current_subtitles, "processing_time": process_time})
+        return jsonify({"subtitles": subtitles, "processing_time": process_time})
 
     except Exception as e:
         logger.error(f"Transcription error: {traceback.format_exc()}")
@@ -141,25 +117,19 @@ def transcribe():
         if temp_audio_path and os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
 
-@app.route("/save-subtitles", methods=["GET"])
+@app.route('/save-subtitles', methods=['GET'])
 def save_subtitles():
     global current_subtitles
-
     if current_subtitles is None:
-        return jsonify({"error": "No subtitles available."}), 404
+        return jsonify({'error': 'No subtitles available to download'}), 400
 
-    try:
-        json_data = json.dumps(current_subtitles, ensure_ascii=False, indent=2).encode('utf-8')
+    # Save the subtitles to a file (e.g., subtitles.json)
+    subtitles_file_path = 'subtitles.json'
+    with open(subtitles_file_path, 'w') as file:
+        json.dump(current_subtitles, file)
 
-        response = make_response(json_data)
-        response.headers['Content-Disposition'] = 'attachment; filename=subtitles.json'
-        response.headers['Content-Type'] = 'application/json; charset=utf-8'
-
-        return response
-    except Exception as e:
-        logger.error(f"Subtitle save error: {traceback.format_exc()}")
-        return jsonify({"error": f"Save failed: {str(e)}"}), 500
+    # Send the file for download
+    return send_file(subtitles_file_path, as_attachment=True)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
