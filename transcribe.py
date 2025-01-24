@@ -30,7 +30,7 @@ current_subtitles = None
 # Load the Whisper model
 try:
     # Use a smaller model that works across different environments
-    model = whisper.load_model("base")
+    model = whisper.load_model("tiny")
     logger.info("Whisper model loaded successfully")
 except Exception as e:
     logger.error(f"Failed to load Whisper model: {e}")
