@@ -226,21 +226,30 @@
 
         // Download Subtitles
         // Download Subtitles
-        downloadSubtitlesBtn.addEventListener('click', function() {
+        downloadSubtitlesBtn.addEventListener('click', function () {
             fetch('/save-subtitles')
-            .then(response => response.json())
-            .then(data => {
-                if (data.message === "Save cancelled by user") {
-                    console.log("User cancelled file save");
-                } else if (data.path) {
-                    alert(`Subtitles saved to: ${data.path}`);
-                }
-            })
-            .catch(error => {
-                console.error('Save error:', error);
-                alert('Failed to save subtitles');
-            });
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to download subtitles');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'subtitles.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Download error:', error);
+                    alert('Failed to download subtitles');
+                });
         });
+
     </script>
     <script src="https://kit.fontawesome.com/99363101d6.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
