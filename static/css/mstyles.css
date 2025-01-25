@@ -55,3 +55,26 @@ input[type="file"] {
         width: 100%; /* Full width for small screens */
     }
 }
+
+
+#subtitleBox {
+    background-color: rgb(37, 37, 37);
+    color: white;
+    font-size: 1.5rem;
+    text-align: center;
+    padding: 20px;
+    margin-top: 20px;
+    height: 150px;
+    overflow-y: auto;
+    border-radius: 10px;
+}
+.audio-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+}
+.progress-bar {
+    flex-grow: 1;
+    margin: 0 15px;
+}
