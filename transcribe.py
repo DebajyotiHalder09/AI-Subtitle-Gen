@@ -4,7 +4,7 @@ import json
 import os
 import logging
 import tempfile
-from flask import Flask, request, jsonify, render_template, make_response, send_file
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import traceback
 import time
@@ -20,8 +20,11 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # Limit file size to 25 MB
 
-# CORS setup
-CORS(app, resources={r"/*": {"origins": "*", "allow_headers": ["Content-Type"]}})
+# Enable CORS
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Initialize global variable for subtitles
+current_subtitles = None
 
 # Detect and select device
 def select_device():
@@ -47,17 +50,7 @@ except Exception as e:
 @app.route("/")
 def index():
     """Root route to render the main page."""
-    return render_template("main.html")
-
-@app.route("/tutorial")
-def tutorial():
-    """Route for the tutorial page."""
-    return render_template("tutorial.html")
-
-@app.route("/about")
-def about():
-    """Route for the about page."""
-    return render_template("about.html")
+    return render_template("test.html")
 
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
@@ -100,7 +93,7 @@ def transcribe():
             for segment in result.get("segments", [])
         ]
 
-        # Set global variable for subtitles
+        # Update global variable for subtitles
         global current_subtitles
         current_subtitles = subtitles
 
@@ -116,20 +109,45 @@ def transcribe():
         # Clean up temporary file
         if temp_audio_path and os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
+@app.route('/generate', methods=['POST'])
+def generate():
+    global current_subtitles
+    if current_subtitles is None:
+        return jsonify({'error': 'No subtitles available to generate'}), 400
 
+    try:
+        # Create a temporary file
+        temp_json_path = os.path.join(tempfile.gettempdir(), "subtitles.json")
+        with open(temp_json_path, 'w', encoding='utf-8') as temp_json:
+            json.dump(current_subtitles, temp_json, ensure_ascii=False, indent=4)
+
+        # Send the file for download
+        return send_file(temp_json_path, as_attachment=True, download_name="subtitles.json", mimetype='application/json')
+
+    except Exception as e:
+        logger.error(f"Error generating JSON: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to generate JSON.'}), 500
+    
 @app.route('/save-subtitles', methods=['GET'])
 def save_subtitles():
     global current_subtitles
     if current_subtitles is None:
         return jsonify({'error': 'No subtitles available to download'}), 400
 
-    # Save the subtitles to a file (e.g., subtitles.json)
-    subtitles_file_path = 'subtitles.json'
-    with open(subtitles_file_path, 'w') as file:
-        json.dump(current_subtitles, file)
+    # Save the subtitles to a temporary file
+    try:
+        temp_json_path = os.path.join(tempfile.gettempdir(), "subtitles.json")
+        with open(temp_json_path, 'w', encoding='utf-8') as temp_json:
+            json.dump(current_subtitles, temp_json, ensure_ascii=False, indent=4)
 
-    # Send the file for download
-    return send_file(subtitles_file_path, as_attachment=True)
+        # Send the file for download
+        return send_file(temp_json_path, as_attachment=True, download_name="subtitles.json", mimetype='application/json')
+
+    except Exception as e:
+        logger.error(f"Error saving subtitles: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to save subtitles.'}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    # Use environment variable PORT for hosting services like Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
