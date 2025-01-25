@@ -78,44 +78,46 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
         function transcribeAudio() {
-        const audioInput = document.getElementById('audioInput');
-        const loader = document.getElementById('loader');
-        const generateBtn = document.getElementById('generateBtn');
+    const audioInput = document.getElementById('audioInput');
+    const loader = document.getElementById('loader');
+    const generateBtn = document.getElementById('generateBtn');
 
-        if (audioInput.files.length === 0) {
-            alert("Please choose an audio file first!");
+    if (audioInput.files.length === 0) {
+        alert("Please choose an audio file first!");
+        return;
+    }
+
+    loader.style.display = 'block';
+    generateBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('audio', audioInput.files[0]);
+
+    fetch('/transcribe', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        loader.style.display = 'none';
+        if (data.error) {
+            console.error('Backend error:', data.error);
+            alert("Error: " + data.error);
             return;
         }
-
-        // Show loader
-        loader.style.display = 'block';
+        alert("Transcription successful! You can now generate subtitles.");
+        generateBtn.disabled = false;
+    })
+    .catch(error => {
+        loader.style.display = 'none';
+        console.error('Fetch error:', error);
+        alert("Error: " + error.message);
         generateBtn.disabled = true;
-
-        // Create a FormData object and append the audio file
-        const formData = new FormData();
-        formData.append('audio', audioInput.files[0]);
-
-        // Send the audio file to the backend
-        fetch('/transcribe', {
-            method: 'POST',
-            body: formData,
-        })
-            .then(response => response.json())
-            .then(data => {
-                loader.style.display = 'none';
-                if (data.error) {
-                    alert("Error: " + data.error);
-                    return;
-                }
-                alert("Transcription successful! You can now generate subtitles.");
-                generateBtn.disabled = false; // Enable the Generate button
-            })
-            .catch(error => {
-                loader.style.display = 'none';
-                alert("Error: " + error.message);
-                generateBtn.disabled = true;
-            });
-    }
+    });
+}
 
     function generateJSON() {
         const loader = document.getElementById('loader');
