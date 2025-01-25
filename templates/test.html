@@ -78,46 +78,66 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
         function transcribeAudio() {
-    const audioInput = document.getElementById('audioInput');
-    const loader = document.getElementById('loader');
-    const generateBtn = document.getElementById('generateBtn');
+            const audioInput = document.getElementById('audioInput');
+            const loader = document.getElementById('loader');
+            const generateBtn = document.getElementById('generateBtn');
 
-    if (audioInput.files.length === 0) {
-        alert("Please choose an audio file first!");
-        return;
-    }
+            if (audioInput.files.length === 0) {
+                alert("Please choose an audio file first!");
+                return;
+            }
 
-    loader.style.display = 'block';
-    generateBtn.disabled = true;
+            loader.style.display = 'block';
+            generateBtn.disabled = true;
 
-    const formData = new FormData();
-    formData.append('audio', audioInput.files[0]);
+            const formData = new FormData();
+            formData.append('audio', audioInput.files[0]);
 
-    fetch('/transcribe', {
-        method: 'POST',
-        body: formData,
-    })
-    .then(response => {
-        console.log('Response status:', response.status);
-        return response.json();
-    })
-    .then(data => {
-        loader.style.display = 'none';
-        if (data.error) {
-            console.error('Backend error:', data.error);
-            alert("Error: " + data.error);
-            return;
+            fetch('/transcribe', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+
+                // Check if response is not empty and has JSON content type
+                if (!response.ok) {
+                    throw new Error('Failed to fetch data from server');
+                }
+
+                const contentType = response.headers.get('Content-Type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json();
+                } else {
+                    return response.text(); // Fallback if not JSON
+                }
+            })
+            .then(data => {
+                loader.style.display = 'none';
+                
+                if (typeof data === 'string') {
+                    console.error('Response is not JSON:', data);
+                    alert("Unexpected response format: " + data);
+                    return;
+                }
+
+                if (data.error) {
+                    console.error('Backend error:', data.error);
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                alert("Transcription successful! You can now generate subtitles.");
+                generateBtn.disabled = false;
+            })
+            .catch(error => {
+                loader.style.display = 'none';
+                console.error('Fetch error:', error);
+                alert("Error: " + error.message);
+                generateBtn.disabled = true;
+            });
         }
-        alert("Transcription successful! You can now generate subtitles.");
-        generateBtn.disabled = false;
-    })
-    .catch(error => {
-        loader.style.display = 'none';
-        console.error('Fetch error:', error);
-        alert("Error: " + error.message);
-        generateBtn.disabled = true;
-    });
-}
+
 
     function generateJSON() {
         const loader = document.getElementById('loader');
@@ -209,14 +229,6 @@
             if (subtitles.length === 0) {
                 throw new Error('No valid subtitles found');
             }
-
-            // // Hide subtitles initially
-            // subtitleBox.textContent = 'Subtitles will appear here...';
-            // subtitleBox.style.backgroundColor = '#f0f8ff'; // Light blue
-            // subtitleBox.style.padding = '10px';
-            // subtitleBox.style.border = '1px solid #ccc';
-            // subtitleBox.style.maxHeight = '200px';
-            // subtitleBox.style.overflowY = 'hidden'; // Disable scrollbar initially
 
             console.log('Subtitles loaded:', subtitles);
         } catch (error) {

@@ -53,7 +53,6 @@ def index():
     return render_template("test.html")
 
 @app.route("/transcribe", methods=["POST"])
-@app.route("/transcribe", methods=["POST"])
 def transcribe():
     """Handles audio transcription and updates global subtitles."""
     start_time = time.time()
