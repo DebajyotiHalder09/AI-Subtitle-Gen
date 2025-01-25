@@ -53,6 +53,7 @@ def index():
     return render_template("test.html")
 
 @app.route("/transcribe", methods=["POST"])
+@app.route("/transcribe", methods=["POST"])
 def transcribe():
     """Handles audio transcription and updates global subtitles."""
     start_time = time.time()
@@ -98,6 +99,7 @@ def transcribe():
         if temp_audio_path and os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
 
+
 @app.route('/generate', methods=['POST'])
 def generate():
     """Generates and sends the subtitles JSON file."""
@@ -134,6 +136,7 @@ def save_subtitles():
     except Exception as e:
         logger.error(f"Error saving subtitles: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to save subtitles.'}), 500
+
 
 if __name__ == "__main__":
     # Use environment variable PORT for hosting services like Render
