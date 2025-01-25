@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Subgen</title>
-    <link rel="stylesheet" href="\static\css\mstyles.css">
+    <link rel="stylesheet" href="/static/css/mstyles.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <style>
         #subtitleBox {
@@ -32,7 +32,7 @@
 </head>
 <body>
     <h1 class="display-1 text-center mb-2">AI Subtitle Generator</h1>
-    <h6 class="display-7 text-center">Powered by Openai-Whisper | Model: tiny.en</h6>
+    <h6 class="display-7 text-center">Powered by OpenAI Whisper | Model: tiny.en</h6>
 
     <div class="container">
         <div class="row my-4">
@@ -53,7 +53,7 @@
                     <i class="fas fa-cogs"></i> Transcribe
                 </button>
                 <button id="generateBtn" class="btn btn-success btn-lg w-100 mt-2" onclick="generateJSON()" disabled>
-                    <i class="fas fa-file-download"></i> Generate
+                    <i class="fas fa-file-download"></i> Download
                 </button>
                 <div id="loader" class="spinner-border text-success my-3" style="display: none;" role="status">
                     <span class="visually-hidden">Loading...</span>
@@ -111,6 +111,43 @@
                 audioPlayer.src = URL.createObjectURL(file);
             } else {
                 audioFileName.textContent = 'No audio file chosen';
+            }
+        }
+
+        async function transcribeAudio() {
+            const audioInput = document.getElementById('audioInput');
+            const loader = document.getElementById('loader');
+            const generateBtn = document.getElementById('generateBtn');
+
+            if (audioInput.files.length === 0) {
+                alert('Please select an audio file first.');
+                return;
+            }
+
+            const file = audioInput.files[0];
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            loader.style.display = 'inline-block';
+
+            try {
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to transcribe audio.');
+                }
+
+                const data = await response.json();
+                subtitles = data.subtitles;
+                document.getElementById('subtitleBox').textContent = 'Transcription completed. Subtitles loaded!';
+                generateBtn.disabled = false;
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                loader.style.display = 'none';
             }
         }
 
