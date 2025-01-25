@@ -6,9 +6,33 @@
     <title>Subgen</title>
     <link rel="stylesheet" href="\static\css\mstyles.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <style>
+        #subtitleBox {
+            background-color: rgb(37, 37, 37);
+            color: white;
+            font-size: 1.5rem;
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+            height: 150px;
+            overflow-y: auto;
+            border-radius: 10px;
+        }
+        .audio-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .progress-bar {
+            flex-grow: 1;
+            margin: 0 15px;
+        }
+    </style>
 </head>
 <body>
-    <h1 class="display-1 text-center my-4">AI Subtitle Generator</h1>
+    <h1 class="display-1 text-center mb-2">AI Subtitle Generator</h1>
+    <h6 class="display-7 text-center">Powered by Openai-Whisper | Model: tiny.en</h6>
 
     <div class="container">
         <div class="row my-4">
@@ -16,60 +40,149 @@
                 <button class="btn btn-success btn-lg w-100" onclick="document.getElementById('audioInput').click()">
                     <i class="fas fa-music"></i> Choose Audio
                 </button>
-                <input type="file" id="audioInput" accept="audio/*">
+                <input type="file" id="audioInput" accept="audio/*" style="display: none;" onchange="updateAudioFileName()">
             </div>
             <div class="col-4">
                 <button class="btn btn-success btn-lg w-100" onclick="document.getElementById('jsonInput').click()">
                     <i class="fas fa-file-code"></i> Choose JSON
                 </button>
-                <input type="file" id="jsonInput" accept=".json">
+                <input type="file" id="jsonInput" accept=".json" style="display: none;" onchange="loadSubtitles()">
             </div>
             <div class="col-4 text-center">
-                <button id="generateBtn" class="btn btn-success btn-lg w-100" onclick="generateJSON()">
-                    <i class="fas fa-cogs"></i> Generate
+                <button id="transcribeBtn" class="btn btn-success btn-lg w-100" onclick="transcribeAudio()">
+                    <i class="fas fa-cogs"></i> Transcribe
+                </button>
+                <button id="generateBtn" class="btn btn-success btn-lg w-100 mt-2" onclick="generateJSON()" disabled>
+                    <i class="fas fa-file-download"></i> Generate
                 </button>
                 <div id="loader" class="spinner-border text-success my-3" style="display: none;" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
             </div>
         </div>
+
+        <div class="row">
+            <div class="col-12">
+                <p id="audioFileName" class="text-center text-muted">No audio file chosen</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <p id="jsonFileName" class="text-center text-muted">No JSON file chosen</p>
+            </div>
+        </div>
+
+        <!-- Subtitle Display -->
+        <div id="subtitleBox">Subtitles will appear here...</div>
+
+        <!-- Audio Controls -->
+        <div class="audio-controls">
+            <button id="playPauseBtn" class="btn btn-primary" onclick="togglePlayPause()">Play</button>
+            <input id="progressBar" class="progress-bar" type="range" min="0" max="100" value="0" step="1" onchange="seekAudio()">
+            <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
+            <input id="volumeControl" type="range" min="0" max="1" step="0.1" value="1" onchange="adjustVolume()">
+            <select id="playbackSpeed" onchange="adjustPlaybackSpeed()">
+                <option value="0.5">0.5x</option>
+                <option value="0.6">0.6x</option>
+                <option value="0.7">0.7x</option>
+                <option value="0.8">0.8x</option>
+                <option value="0.9">0.9x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+            </select>
+        </div>
+        <audio id="audioPlayer" ontimeupdate="syncSubtitles()"></audio>
     </div>
 
     <script src="https://kit.fontawesome.com/99363101d6.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
-        function generateJSON() {
-            const loader = document.getElementById('loader');
-            const generateBtn = document.getElementById('generateBtn');
+        let subtitles = [];
+        let audioPlayer = document.getElementById('audioPlayer');
 
-            // Show loading animation
-            loader.style.display = 'block';
-            generateBtn.disabled = true;
+        function updateAudioFileName() {
+            const audioInput = document.getElementById('audioInput');
+            const audioFileName = document.getElementById('audioFileName');
 
-            // Send POST request to generate
-            fetch('/generate', {
-                method: 'POST'
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Failed to generate JSON');
-                return response.blob(); 
-            })
-            .then(blob => {
-                loader.style.display = 'none';
-                generateBtn.disabled = false;
+            if (audioInput.files.length > 0) {
+                const file = audioInput.files[0];
+                audioFileName.textContent = `Selected Audio: ${file.name}`;
+                audioPlayer.src = URL.createObjectURL(file);
+            } else {
+                audioFileName.textContent = 'No audio file chosen';
+            }
+        }
 
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'subtitles.json';
-                a.click();
-                window.URL.revokeObjectURL(url);
-            })
-            .catch(error => {
-                loader.style.display = 'none';
-                generateBtn.disabled = false;
-                alert('Error: ' + error.message);
-            });
+        function loadSubtitles() {
+            const jsonInput = document.getElementById('jsonInput');
+            const jsonFileName = document.getElementById('jsonFileName');
+
+            if (jsonInput.files.length > 0) {
+                const file = jsonInput.files[0];
+                jsonFileName.textContent = `Selected JSON: ${file.name}`;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    subtitles = JSON.parse(event.target.result);
+                };
+                reader.readAsText(file);
+            } else {
+                jsonFileName.textContent = 'No JSON file chosen';
+            }
+        }
+
+        function syncSubtitles() {
+            const currentTime = audioPlayer.currentTime;
+            const subtitleBox = document.getElementById('subtitleBox');
+
+            const currentSubtitle = subtitles.find(sub => currentTime >= sub.start && currentTime <= sub.end);
+            subtitleBox.textContent = currentSubtitle ? currentSubtitle.text : '';
+
+            updateProgressBar();
+        }
+
+        function togglePlayPause() {
+            const playPauseBtn = document.getElementById('playPauseBtn');
+
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                playPauseBtn.textContent = 'Pause';
+            } else {
+                audioPlayer.pause();
+                playPauseBtn.textContent = 'Play';
+            }
+        }
+
+        function updateProgressBar() {
+            const progressBar = document.getElementById('progressBar');
+            const currentTime = document.getElementById('currentTime');
+            const duration = document.getElementById('duration');
+
+            progressBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+            currentTime.textContent = formatTime(audioPlayer.currentTime);
+            duration.textContent = formatTime(audioPlayer.duration);
+        }
+
+        function seekAudio() {
+            const progressBar = document.getElementById('progressBar');
+            audioPlayer.currentTime = (progressBar.value / 100) * audioPlayer.duration;
+        }
+
+        function adjustVolume() {
+            const volumeControl = document.getElementById('volumeControl');
+            audioPlayer.volume = volumeControl.value;
+        }
+
+        function adjustPlaybackSpeed() {
+            const playbackSpeed = document.getElementById('playbackSpeed');
+            audioPlayer.playbackRate = playbackSpeed.value;
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
         }
     </script>
 </body>

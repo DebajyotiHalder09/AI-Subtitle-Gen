@@ -54,80 +54,68 @@ def index():
 
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
+    """Handles audio transcription and updates global subtitles."""
     start_time = time.time()
 
-    # Check if an audio file is uploaded
     if "audio" not in request.files:
         return jsonify({"error": "No audio file uploaded."}), 400
 
     audio_file = request.files["audio"]
-
-    # Validate file type
     allowed_extensions = (".mp3", ".wav", ".m4a", ".webm", ".ogg")
     if not audio_file.filename.lower().endswith(allowed_extensions):
         return jsonify({"error": "Invalid file type. Only audio files are allowed."}), 400
 
     temp_audio_path = None
     try:
-        # Save uploaded audio to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio:
             audio_file.save(temp_audio.name)
             temp_audio_path = temp_audio.name
 
-        # Check file size
         if os.stat(temp_audio_path).st_size == 0:
             return jsonify({"error": "Uploaded file is empty."}), 400
 
-        # Transcribe audio
-        logger.info(f"Starting transcription for {temp_audio_path}")
         result = model.transcribe(
             temp_audio_path,
             task="transcribe",
             word_timestamps=False,
-            fp16=(device != "cpu")  # Use FP16 only if not on CPU
+            fp16=(device != "cpu")
         )
 
-        # Process transcription result
-        subtitles = [
+        global current_subtitles
+        current_subtitles = [
             {"start": segment.get("start", 0), "end": segment.get("end", 0), "text": segment["text"].strip()}
             for segment in result.get("segments", [])
         ]
 
-        # Update global variable for subtitles
-        global current_subtitles
-        current_subtitles = subtitles
-
         process_time = time.time() - start_time
-        logger.info(f"Transcription completed in {process_time:.2f} seconds")
-        return jsonify({"subtitles": subtitles, "processing_time": process_time})
+        return jsonify({"subtitles": current_subtitles, "processing_time": process_time})
 
     except Exception as e:
         logger.error(f"Transcription error: {traceback.format_exc()}")
         return jsonify({"error": f"Transcription failed: {str(e)}"}), 500
 
     finally:
-        # Clean up temporary file
         if temp_audio_path and os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
+
 @app.route('/generate', methods=['POST'])
 def generate():
+    """Generates and sends the subtitles JSON file."""
     global current_subtitles
     if current_subtitles is None:
-        return jsonify({'error': 'No subtitles available to generate'}), 400
+        return jsonify({'error': 'No subtitles available. Please transcribe first.'}), 400
 
     try:
-        # Create a temporary file
         temp_json_path = os.path.join(tempfile.gettempdir(), "subtitles.json")
         with open(temp_json_path, 'w', encoding='utf-8') as temp_json:
             json.dump(current_subtitles, temp_json, ensure_ascii=False, indent=4)
 
-        # Send the file for download
         return send_file(temp_json_path, as_attachment=True, download_name="subtitles.json", mimetype='application/json')
 
     except Exception as e:
         logger.error(f"Error generating JSON: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to generate JSON.'}), 500
-    
+
 @app.route('/save-subtitles', methods=['GET'])
 def save_subtitles():
     global current_subtitles
