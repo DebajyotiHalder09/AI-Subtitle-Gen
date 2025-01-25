@@ -100,27 +100,32 @@
             .then(response => {
                 console.log('Response status:', response.status);
 
-                // Check if response is not empty and has JSON content type
+                // Check if response is successful (status 200-299)
                 if (!response.ok) {
                     throw new Error('Failed to fetch data from server');
                 }
 
+                // Check the content type of the response
                 const contentType = response.headers.get('Content-Type');
                 if (contentType && contentType.includes('application/json')) {
+                    // If response is JSON, parse it
                     return response.json();
                 } else {
-                    return response.text(); // Fallback if not JSON
+                    // If response is not JSON, return text instead
+                    return response.text();
                 }
             })
             .then(data => {
                 loader.style.display = 'none';
                 
+                // If the response is text (not JSON), log it
                 if (typeof data === 'string') {
                     console.error('Response is not JSON:', data);
                     alert("Unexpected response format: " + data);
                     return;
                 }
 
+                // Handle the case where the response is JSON
                 if (data.error) {
                     console.error('Backend error:', data.error);
                     alert("Error: " + data.error);
@@ -136,6 +141,7 @@
                 alert("Error: " + error.message);
                 generateBtn.disabled = true;
             });
+
         }
 
 
