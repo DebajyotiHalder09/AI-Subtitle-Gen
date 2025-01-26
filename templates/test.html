@@ -57,15 +57,17 @@
         <!-- Audio Controls -->
         <div class="audio-controls">
             <button id="playPauseBtn" class="btn btn-primary" onclick="togglePlayPause()">Play</button>
-            <input id="progressBar" class="progress-bar" type="range" min="0" max="100" value="0" step="1" onchange="seekAudio()">
+            <input id="progressBar" class="progress-bar" type="range" min="0" max="100" value="0" step="1" onchange="seekAudio()"style="width: 40%;">
             <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
-            <input id="volumeControl" type="range" min="0" max="1" step="0.1" value="1" onchange="adjustVolume()">
-            <select id="playbackSpeed" onchange="adjustPlaybackSpeed()">
-                <option value="0.5">0.5x</option>
-                <option value="0.6">0.6x</option>
-                <option value="0.7">0.7x</option>
+            <input id="volumeControl" type="range" min="0" max="1" step="0.1" value="1" onchange="adjustVolume()" class="mx-2">
+            <select id="playbackSpeed" onchange="adjustPlaybackSpeed()" class="mx-2">
+                <option value="0.75">0.75x</option>
                 <option value="0.8">0.8x</option>
                 <option value="0.9">0.9x</option>
+                <option value="0.94">0.94x</option>
+                <option value="0.95">0.95x</option>
+                <option value="0.96">0.96x</option>
+                <option value="0.98">0.98x</option>
                 <option value="1" selected>1x</option>
                 <option value="1.5">1.5x</option>
                 <option value="2">2x</option>
@@ -353,6 +355,9 @@ function syncSubtitles() {
     });
 
     </script>
-    
+    <footer class="fixed-bottom bg-dark text-light text-center py-2">
+        <p class="mb-0">&copy; 2025 AI Subtitle Generator. All rights reserved.</p><br>
+        <p>Creator: Debajyoti Halder Ayon</p>
+    </footer>
 </body>
 </html>
