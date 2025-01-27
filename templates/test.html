@@ -79,285 +79,281 @@
     <script src="https://kit.fontawesome.com/99363101d6.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
-        function transcribeAudio() {
+        // Global variables
+        let serverUrl = localStorage.getItem('serverUrl') || 'https://aiensubgen.onrender.com';
+        let subtitles = [];
+        let audioLoaded = false;
+    
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set initial server URL
+            document.getElementById('serverUrl').value = serverUrl;
+            
+            // Add audio player event listeners
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.addEventListener('timeupdate', updateProgressBar);
+            audioPlayer.addEventListener('loadedmetadata', updateProgressBar);
+            audioPlayer.addEventListener('timeupdate', syncSubtitles);
+    
+            // Initialize volume
+            document.getElementById('volumeControl').value = 1;
+        });
+    
+        // Server URL management
+        function saveServerUrl() {
+            const input = document.getElementById('serverUrl');
+            serverUrl = input.value.trim() || 'https://aiensubgen.onrender.com';
+            localStorage.setItem('serverUrl', serverUrl);
+            alert('Server URL saved: ' + serverUrl);
+        }
+    
+        // File management functions
+        function updateAudioFileName() {
+            const audioInput = document.getElementById('audioInput');
+            const audioFileName = document.getElementById('audioFileName');
+            audioFileName.textContent = audioInput.files.length > 0 
+                ? `Audio: ${audioInput.files[0].name}` 
+                : 'No audio file selected';
+            
+            // Reset audio player when new file is selected
+            audioLoaded = false;
+            document.getElementById('playPauseBtn').textContent = 'Play';
+        }
+    
+        function updateJSONFileName() {
+            const jsonInput = document.getElementById('jsonInput');
+            const jsonFileName = document.getElementById('jsonFileName');
+            jsonFileName.textContent = jsonInput.files.length > 0 
+                ? `Subtitles: ${jsonInput.files[0].name}` 
+                : 'No subtitle file selected';
+            
+            if (jsonInput.files.length > 0) {
+                loadSubtitles();
+            }
+        }
+    
+        // Transcription function
+        async function transcribeAudio() {
             const audioInput = document.getElementById('audioInput');
             const loader = document.getElementById('loader');
             const generateBtn = document.getElementById('generateBtn');
-
-            if (audioInput.files.length === 0) {
-                alert("Please choose an audio file first!");
+            const subtitleBox = document.getElementById('subtitleBox');
+    
+            if (!audioInput.files.length) {
+                alert("Please select an audio file first!");
                 return;
             }
-
+    
             loader.style.display = 'block';
             generateBtn.disabled = true;
-
+            subtitleBox.textContent = 'Transcribing...';
+    
             const formData = new FormData();
             formData.append('audio', audioInput.files[0]);
-
-            fetch('/transcribe', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(response => {
-                console.log('Response status:', response.status);
-
-                // Check if response is successful (status 200-299)
+    
+            try {
+                const response = await fetch(`${serverUrl}/transcribe`, {
+                    method: 'POST',
+                    body: formData,
+                    mode: 'cors',
+                });
+    
                 if (!response.ok) {
-                    throw new Error('Failed to fetch data from server');
+                    throw new Error(`Server error: ${response.status}`);
                 }
-
-                // Check the content type of the response
-                const contentType = response.headers.get('Content-Type');
-                if (contentType && contentType.includes('application/json')) {
-                    // If response is JSON, parse it
-                    return response.json();
-                } else {
-                    // If response is not JSON, return text instead
-                    return response.text();
-                }
-            })
-            .then(data => {
-                loader.style.display = 'none';
+    
+                const data = await response.json();
                 
-                // If the response is text (not JSON), log it
-                if (typeof data === 'string') {
-                    console.error('Response is not JSON:', data);
-                    alert("Unexpected response format: " + data);
-                    return;
-                }
-
-                // Handle the case where the response is JSON
                 if (data.error) {
-                    console.error('Backend error:', data.error);
-                    alert("Error: " + data.error);
-                    return;
+                    throw new Error(data.error);
                 }
-
-                alert("Transcription successful! You can now generate subtitles.");
+    
+                subtitles = data.subtitles;
                 generateBtn.disabled = false;
-            })
-            .catch(error => {
+                subtitleBox.textContent = 'Transcription complete! Click Download Subtitles to save.';
+                alert("Transcription complete! You can now download the subtitles.");
+    
+            } catch (error) {
+                console.error('Transcription error:', error);
+                alert("Error during transcription: " + error.message);
+                subtitleBox.textContent = 'Transcription failed. Please try again.';
+            } finally {
                 loader.style.display = 'none';
-                console.error('Fetch error:', error);
-                alert("Error: " + error.message);
-                generateBtn.disabled = true;
-            });
-
+            }
         }
-
-
-    function generateJSON() {
-        const loader = document.getElementById('loader');
-        const generateBtn = document.getElementById('generateBtn');
-        
-        // Show loader
-        loader.style.display = 'block';
-        generateBtn.disabled = true;
-
-        // Send POST request to /generate
-        fetch('/generate', {
-            method: 'POST',
-        })
-            .then(response => {
-                if (!response.ok) throw new Error('Failed to generate JSON');
-                return response.blob();
-            })
-            .then(blob => {
-                loader.style.display = 'none';
-                generateBtn.disabled = false;
-
+    
+        // Generate and download JSON
+        async function generateJSON() {
+            const loader = document.getElementById('loader');
+            const generateBtn = document.getElementById('generateBtn');
+            
+            if (!subtitles || subtitles.length === 0) {
+                alert('No subtitles available. Please transcribe first.');
+                return;
+            }
+    
+            loader.style.display = 'block';
+            generateBtn.disabled = true;
+    
+            try {
+                const response = await fetch(`${serverUrl}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ subtitles: subtitles }),
+                    mode: 'cors',
+                });
+    
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+    
+                const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = 'subtitles.json';
+                document.body.appendChild(a);
                 a.click();
+                document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
-            })
-            .catch(error => {
+    
+            } catch (error) {
+                console.error('Generation error:', error);
+                alert("Error generating subtitles: " + error.message);
+            } finally {
                 loader.style.display = 'none';
-                alert("Error: " + error.message);
-                generateBtn.disabled = true;
-            });
-    }
-
-    function updateAudioFileName() {
-        const audioInput = document.getElementById('audioInput');
-        const audioFileName = document.getElementById('audioFileName');
-
-        if (audioInput.files.length > 0) {
-            audioFileName.textContent = `Selected Audio: ${audioInput.files[0].name}`;
-        } else {
-            audioFileName.textContent = 'No audio file chosen';
-        }
-    }
-
-    function updateJSONFileName() {
-        const jsonInput = document.getElementById('jsonInput');
-        const jsonFileName = document.getElementById('jsonFileName');
-
-        if (jsonInput.files.length > 0) {
-            jsonFileName.textContent = `Selected JSON: ${jsonInput.files[0].name}`;
-        } else {
-            jsonFileName.textContent = 'No JSON file chosen';
-        }
-    }
-
-    let subtitles = [];
-    let audioLoaded = false;
-
-    document.getElementById('jsonInput').addEventListener('change', loadSubtitles);
-
-    function loadSubtitles() {
-    const jsonInput = document.getElementById('jsonInput');
-    const subtitleBox = document.getElementById('subtitleBox');
-
-    if (jsonInput.files.length === 0) {
-        alert('Please select a JSON file');
-        return;
-    }
-
-    const file = jsonInput.files[0];
-    const reader = new FileReader();
-
-    reader.onload = function(event) {
-        try {
-            const parsedSubtitles = JSON.parse(event.target.result);
-
-            if (!Array.isArray(parsedSubtitles)) {
-                throw new Error('Invalid subtitle format');
+                generateBtn.disabled = false;
             }
-
-            subtitles = parsedSubtitles.filter(sub => 
-                sub.start !== undefined && 
-                sub.end !== undefined && 
-                sub.text !== undefined
+        }
+    
+        // Subtitle loading and syncing
+        function loadSubtitles() {
+            const jsonInput = document.getElementById('jsonInput');
+            const subtitleBox = document.getElementById('subtitleBox');
+    
+            if (!jsonInput.files.length) {
+                alert('Please select a JSON file');
+                return;
+            }
+    
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const parsedSubtitles = JSON.parse(event.target.result);
+                    if (!Array.isArray(parsedSubtitles)) {
+                        throw new Error('Invalid subtitle format');
+                    }
+    
+                    subtitles = parsedSubtitles.filter(sub => 
+                        sub.start !== undefined && 
+                        sub.end !== undefined && 
+                        sub.text !== undefined
+                    );
+    
+                    if (subtitles.length === 0) {
+                        throw new Error('No valid subtitles found');
+                    }
+    
+                    subtitleBox.textContent = 'Subtitles loaded successfully';
+                    document.getElementById('generateBtn').disabled = false;
+    
+                } catch (error) {
+                    console.error('Subtitle loading error:', error);
+                    subtitleBox.textContent = 'Error loading subtitles';
+                    alert(error.message);
+                }
+            };
+    
+            reader.readAsText(jsonInput.files[0]);
+        }
+    
+        // Audio player controls
+        function togglePlayPause() {
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const audioInput = document.getElementById('audioInput');
+    
+            if (!audioInput.files.length) {
+                alert("Please select an audio file first!");
+                return;
+            }
+    
+            if (!audioLoaded) {
+                audioPlayer.src = URL.createObjectURL(audioInput.files[0]);
+                audioLoaded = true;
+            }
+    
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                playPauseBtn.textContent = 'Pause';
+            } else {
+                audioPlayer.pause();
+                playPauseBtn.textContent = 'Play';
+            }
+        }
+    
+        function updateProgressBar() {
+            const audioPlayer = document.getElementById('audioPlayer');
+            const progressBar = document.getElementById('progressBar');
+            const currentTime = document.getElementById('currentTime');
+            const duration = document.getElementById('duration');
+    
+            if (!isNaN(audioPlayer.duration)) {
+                const value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                progressBar.value = value;
+                currentTime.textContent = formatTime(audioPlayer.currentTime);
+                duration.textContent = formatTime(audioPlayer.duration);
+            }
+        }
+    
+        function seekAudio() {
+            const audioPlayer = document.getElementById('audioPlayer');
+            const progressBar = document.getElementById('progressBar');
+            const seekTime = (progressBar.value / 100) * audioPlayer.duration;
+            audioPlayer.currentTime = seekTime;
+        }
+    
+        function syncSubtitles() {
+            const audioPlayer = document.getElementById('audioPlayer');
+            const subtitleBox = document.getElementById('subtitleBox');
+            const currentTime = audioPlayer.currentTime;
+    
+            if (!subtitles || subtitles.length === 0) {
+                return;
+            }
+    
+            const currentSubtitle = subtitles.find(sub => 
+                currentTime >= sub.start && 
+                currentTime <= sub.end
             );
-
-            if (subtitles.length === 0) {
-                throw new Error('No valid subtitles found');
-            }
-
-            console.log('Subtitles loaded:', subtitles);
-        } catch (error) {
-            subtitleBox.textContent = 'Error loading subtitles';
-            console.error('Subtitle loading error:', error);
-            alert(error.message);
+    
+            subtitleBox.textContent = currentSubtitle ? currentSubtitle.text : '';
         }
-    };
-
-    reader.readAsText(file);
-}
-
-function syncSubtitles() {
-    const audioPlayer = document.getElementById('audioPlayer');
-    const subtitleBox = document.getElementById('subtitleBox');
-
-    if (!subtitles || subtitles.length === 0) {
-        subtitleBox.textContent = 'No subtitles loaded';
-        return;
-    }
-
-    const currentTime = audioPlayer.currentTime;
-
-    // Find the current subtitle
-    const currentSubtitle = subtitles.find(sub => 
-        currentTime >= parseFloat(sub.start) && 
-        currentTime <= parseFloat(sub.end)
-    );
-
-    // Update subtitle box with the current subtitle
-    if (currentSubtitle) {
-        subtitleBox.textContent = currentSubtitle.text;
-    } else {
-        subtitleBox.textContent = ''; // Clear subtitle if none matches
-    }
-}
-
-    // Modify togglePlayPause to ensure audio player works
-    function togglePlayPause() {
-        const playPauseBtn = document.getElementById('playPauseBtn');
-        const audioPlayer = document.getElementById('audioPlayer');
-        const audioInput = document.getElementById('audioInput');
-
-        if (audioInput.files.length === 0) {
-            alert("Please select an audio file first!");
-            return;
+    
+        function adjustVolume() {
+            const volumeControl = document.getElementById('volumeControl');
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.volume = volumeControl.value;
         }
-
-        if (!audioLoaded) {
-            audioPlayer.src = URL.createObjectURL(audioInput.files[0]);
-            audioLoaded = true;
-            
-            // Add event listeners for progress and duration
-            audioPlayer.addEventListener('loadedmetadata', updateProgressBar);
-            audioPlayer.addEventListener('timeupdate', updateProgressBar);
+    
+        function adjustPlaybackSpeed() {
+            const playbackSpeed = document.getElementById('playbackSpeed');
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.playbackRate = parseFloat(playbackSpeed.value);
         }
-
-        if (audioPlayer.paused) {
-            audioPlayer.play();
-            playPauseBtn.textContent = 'Pause';
-        } else {
-            audioPlayer.pause();
-            playPauseBtn.textContent = 'Play';
+    
+        // Utility function
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
-    }
-
-    // Comprehensive updateProgressBar function
-    function updateProgressBar() {
-        const progressBar = document.getElementById('progressBar');
-        const currentTime = document.getElementById('currentTime');
-        const duration = document.getElementById('duration');
-        const audioPlayer = document.getElementById('audioPlayer');
-
-        if (audioPlayer.duration && !isNaN(audioPlayer.duration)) {
-            progressBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-            currentTime.textContent = formatTime(audioPlayer.currentTime);
-            duration.textContent = formatTime(audioPlayer.duration);
-        }
-
-        // Sync subtitles
-        syncSubtitles();
-    }
-
-    // Ensure seekAudio works correctly
-    function seekAudio() {
-        const progressBar = document.getElementById('progressBar');
-        const audioPlayer = document.getElementById('audioPlayer');
-        audioPlayer.currentTime = (progressBar.value / 100) * audioPlayer.duration;
-    }
-
-    function adjustVolume() {
-        const volumeControl = document.getElementById('volumeControl');
-        const audioPlayer = document.getElementById('audioPlayer');
-        audioPlayer.volume = volumeControl.value;
-    }
-
-    function adjustPlaybackSpeed() {
-        const playbackSpeed = document.getElementById('playbackSpeed');
-        const audioPlayer = document.getElementById('audioPlayer');
-        audioPlayer.playbackRate = playbackSpeed.value;
-    }
-
-    function formatTime(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    // Add event listeners after page load
-    document.addEventListener('DOMContentLoaded', function() {
-    const audioPlayer = document.getElementById('audioPlayer');
-    const progressBar = document.getElementById('progressBar');
-
-    // Add timeupdate event listener to frequently check and update subtitles
-    audioPlayer.addEventListener('timeupdate', syncSubtitles);
-    });
-
     </script>
-    <footer class="fixed-bottom bg-dark text-light text-center py-2">
+    <!-- <footer class="fixed-bottom bg-dark text-light text-center py-2">
         <p class="mb-0">&copy; 2025 AI Subtitle Generator. All rights reserved.</p><br>
         <p>Creator: Debajyoti Halder Ayon</p>
-    </footer>
+    </footer> -->
 </body>
 </html>
