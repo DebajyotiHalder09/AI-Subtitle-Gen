@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SubPlay - Audio Player with Subtitles</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: #333;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .top-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            min-width: 120px;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .subtitle-container {
+            position: relative;
+            background-color: #333;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px auto;
+            width: 90%;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            resize: both;
+            overflow: auto;
+        }
+
+        .subtitle-text {
+            color: white;
+            font-size: 24px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SubPlay</h1>
+    </div>
+
+    <div class="top-controls">
+        <button class="btn" id="chooseAudio">Choose Audio</button>
+        <button class="btn" id="generate">Generate</button>
+        <button class="btn" id="download" disabled>Download</button>
+    </div>
+
+    <div class="subtitle-container" id="subtitleContainer">
+        <div class="subtitle-text" id="subtitleText">No subtitle loaded</div>
+    </div>
+
+    <input type="file" id="audioFile" accept="audio/*" style="display: none">
+
+    <script>
+        const chooseAudioBtn = document.getElementById('chooseAudio');
+        const generateBtn = document.getElementById('generate');
+        const downloadBtn = document.getElementById('download');
+        const subtitleText = document.getElementById('subtitleText');
+        const audioFileInput = document.getElementById('audioFile');
+        let resultId = null;
+
+        chooseAudioBtn.addEventListener('click', () => audioFileInput.click());
+        audioFileInput.addEventListener('change', handleAudioFile);
+        generateBtn.addEventListener('click', generateSubtitles);
+        downloadBtn.addEventListener('click', downloadSubtitles);
+
+        function handleAudioFile(e) {
+            if (e.target.files.length > 0) {
+                chooseAudioBtn.textContent = 'Audio Selected';
+            }
+        }
+
+        function generateSubtitles() {
+            const file = audioFileInput.files[0];
+            if (!file) {
+                alert('Please select an audio file first!');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    resultId = data.result_id;
+                    downloadBtn.disabled = false;
+                    subtitleText.textContent = 'Subtitles generated! Ready to download.';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate';
+            })
+            .catch(error => {
+                alert('An error occurred: ' + error);
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate';
+            });
+        }
+
+        function downloadSubtitles() {
+            if (!resultId) return;
+            window.location.href = `/api/download/${resultId}`;
+        }
+    </script>
+</body>
+</html>
